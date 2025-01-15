@@ -26,43 +26,57 @@ void motor_stop() {
     return;
 }
 void move_back() {
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
     digitalWrite(PIN_RD0, 0);
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    __delay_ms(680);
+    setCCP1PwmDutyCycle(1023, 16);
+    setCCP2PwmDutyCycle(1023, 16);
+    __delay_ms(100);
+    setCCP1PwmDutyCycle(680, 16);
+    setCCP2PwmDutyCycle(680, 16);
     return;
 }
 void move_forward() {
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    
     digitalWrite(PIN_RD0, 1);
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    __delay_ms(680);
+    setCCP1PwmDutyCycle(1023, 16);
+    setCCP2PwmDutyCycle(1023, 16);
+    __delay_ms(100);
+    setCCP1PwmDutyCycle(680, 16);
+    setCCP2PwmDutyCycle(680, 16);
     return;
 }
 void motor_turn_left() {
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
     digitalWrite(PIN_RD0, 1);
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    __delay_ms(680);
+    setCCP1PwmDutyCycle(1023, 16);
+    setCCP2PwmDutyCycle(1023, 16);
+    __delay_ms(100);
+    setCCP1PwmDutyCycle(680, 16);
+    setCCP2PwmDutyCycle(680, 16);
     return;
 }
 void motor_turn_right() {
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
     digitalWrite(PIN_RD0, 0);
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    __delay_ms(680);
+    setCCP1PwmDutyCycle(1023, 16);
+    setCCP2PwmDutyCycle(1023, 16);
+    __delay_ms(100);
+    setCCP1PwmDutyCycle(680, 16);
+    setCCP2PwmDutyCycle(680, 16);
+    return;
+}
+
+void fan_toggle(){
+    digitalWrite(PIN_RD5,!pinState(PIN_RD5));   
     return;
 }
 
@@ -80,6 +94,8 @@ void onReadChar(char c) {
         move_forward();
     else if (c == 'B')
         move_back();
+    else if(c == 'S')
+        fan_toggle();
     else
         motor_stop();
     return;
@@ -87,8 +103,7 @@ void onReadChar(char c) {
 
 
 void __interrupt(high_priority) H_ISR() {
-    if (processSerialReceive())
-        return;
+    
     if (interruptByRB1External()) {
         clearInterrupt_RB1External();
         if (INTCON2bits.INTEDG1 == 1) {
@@ -99,7 +114,12 @@ void __interrupt(high_priority) H_ISR() {
             disableTimer1();
             float duration = getTimer1us(8); 
             float distance = duration / 29.0 / 2.0 / 100;
-            // serialPrintf("Distance: %.4f m\n", distance);
+            serialPrintf("Distance: %.4f m\n", distance);
+            if(distance<0.1){
+                motor_turn_left();
+                __delay_ms(500);
+                motor_stop();
+            }
             INTCON2bits.INTEDG1 = 1;
         }
     }
@@ -118,7 +138,8 @@ void __interrupt(high_priority) H_ISR() {
 }
 
 void __interrupt(low_priority) Lo_ISR(void) {
-    
+    if (processSerialReceive())
+        return;
 }
 
 void main(void) {
@@ -141,14 +162,19 @@ void main(void) {
     enableInterrupt_RB0External();  // enable RB0 interrupt
 
     // UART
-    serialBegin(9600, 0b1);
+    serialBegin(9600, 0b0);
     serialOnReadLine = onReadLine;
-    // serialOnReadChar = onReadChar;
+    serialOnReadChar = onReadChar;
+
+
+    // fan
+    pinMode(PIN_RD5,PIN_OUTPUT);
+    digitalWrite(PIN_RD5,1);
 
     //
-    digitalWrite(PIN_RA1, 0);
-    digitalWrite(PIN_RA2, 0);
-    digitalWrite(PIN_RA3, 0);
+    // digitalWrite(PIN_RA1, 0);
+    // digitalWrite(PIN_RA2, 0);
+    // digitalWrite(PIN_RA3, 0);
 
     pinMode(PIN_RD0, PIN_OUTPUT);
     pinMode(PIN_RD1, PIN_OUTPUT);
@@ -175,15 +201,12 @@ void main(void) {
     char cache[20];
 
     while (1) {
-        // TMR1 = 0;
-        // digitalWrite(PIN_RD4, 1);
-        // __delay_us(10);
-        // digitalWrite(PIN_RD4, 0);
-
-
-        // enableTimer1(TIMER1_PRESCALE_8);
-
-        // __delay_ms(50); 
+        TMR1 = 0;
+        digitalWrite(PIN_RD4, 1);
+        __delay_us(10);
+        digitalWrite(PIN_RD4, 0);
+        enableTimer1(TIMER1_PRESCALE_8);
+        __delay_ms(50); 
     }
     return;
 }
