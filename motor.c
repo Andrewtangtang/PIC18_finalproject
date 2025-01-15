@@ -4,6 +4,7 @@
 #include <builtins.h>
 
 #define _XTAL_FREQ 4000000  // Internal Clock speed
+#define LOW_SPEED 720
 #include "lib.h"
 
 #pragma config OSC = INTIO67  // Oscillator Selection bits
@@ -17,36 +18,36 @@ bool power=false;
 int flash_state = 0;
 
 void motor_stop() {
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED, 16);
+    setCCP2PwmDutyCycle(LOW_SPEED, 16);
     digitalWrite(PIN_RD0, 1);
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 1);
     return;
 }
-void move_back() {
+void move_forward() {
     digitalWrite(PIN_RD0, 0);
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    setCCP1PwmDutyCycle(1023, 16);
-    setCCP2PwmDutyCycle(1023, 16);
+    setCCP1PwmDutyCycle(1500, 16);
+    setCCP2PwmDutyCycle(1500, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED, 16);
+    setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
-void move_forward() {
+void move_back() {
     digitalWrite(PIN_RD0, 1);
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    setCCP1PwmDutyCycle(1023, 16);
-    setCCP2PwmDutyCycle(1023, 16);
+    setCCP1PwmDutyCycle(1500, 16);
+    setCCP2PwmDutyCycle(1500, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED, 16);
+    setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
 void motor_turn_left() {
@@ -54,11 +55,11 @@ void motor_turn_left() {
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    setCCP1PwmDutyCycle(1023, 16);
-    setCCP2PwmDutyCycle(1023, 16);
+    setCCP1PwmDutyCycle(1500, 16);
+    setCCP2PwmDutyCycle(1500, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED, 16);
+    setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
 void motor_turn_right() {
@@ -66,11 +67,11 @@ void motor_turn_right() {
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    setCCP1PwmDutyCycle(1023, 16);
-    setCCP2PwmDutyCycle(1023, 16);
+    setCCP1PwmDutyCycle(1500, 16);
+    setCCP2PwmDutyCycle(1500, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(680, 16);
-    setCCP2PwmDutyCycle(680, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED, 16);
+    setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
 
@@ -102,19 +103,24 @@ void onReadChar(char c) {
 
 
 void __interrupt(high_priority) H_ISR() {
-    
     if (interruptByRB0External())
     {   
         digitalWrite(PIN_RD6,1);
         if (power)
-        {
+        {   
+            digitalWrite(PIN_RD6,0);
             power=false;
+            motor_stop();
+            digitalWrite(PIN_RD5,1);
         }
         else{
             power=true;
+            digitalWrite(PIN_RD6,1);
         }
         clearInterrupt_RB0External();
     }
+    if (!power)
+        return;
     if (interruptByRB1External()) {
         clearInterrupt_RB1External();
         if (INTCON2bits.INTEDG1 == 1) {
@@ -126,7 +132,7 @@ void __interrupt(high_priority) H_ISR() {
             float duration = getTimer1us(8); 
             float distance = duration / 29.0 / 2.0 / 100;
             serialPrintf("Distance: %.4f m\n", distance);
-            if(distance<0.1){
+            if(distance<0.2){
                 motor_turn_left();
                 __delay_ms(500);
                 motor_stop();
@@ -149,6 +155,8 @@ void __interrupt(high_priority) H_ISR() {
 }
 
 void __interrupt(low_priority) Lo_ISR(void) {
+    if (!power)
+        return; 
     if (processSerialReceive())
         return;
 }
@@ -168,7 +176,6 @@ void main(void) {
 
     pinMode(PIN_RD6,PIN_OUTPUT);
     digitalWrite(PIN_RD6,0);
-    while (!power);
     
     //sonic
     pinMode(PIN_RB1, PIN_INPUT);
@@ -214,6 +221,10 @@ void main(void) {
     char cache[20];
 
     while (1) {
+        if (!power)
+        {
+            continue;
+        }
         TMR1 = 0;
         digitalWrite(PIN_RD4, 1);
         __delay_us(10);
