@@ -1,0 +1,16 @@
+# 編譯產生的文件
+*.o
+*.obj
+*.hex
+*.cof
+*.lst
+*.map
+
+# IDE生成的文件夾
+build/
+dist/
+debug/
+
+# 其他臨時文件
+*.tmp
+*~ 
