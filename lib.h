@@ -568,7 +568,7 @@ inline void serialBegin(long baudRate, byte receiveInterruptPriority) {
     BAUDCONbits.BRG16 = 1;  // 16 bits or 8 bits
 
     long baudRateGenerator = _XTAL_FREQ / baudRate;
-    TXSTAbits.BRGH = baudRate > 9600;  // High Baud Rate Select bit
+    TXSTAbits.BRGH = 0;  // High Baud Rate Select bit
 
     // https://ww1.microchip.com/downloads/en/devicedoc/39631e.pdf#page=207
     if (!TXSTAbits.SYNC && !BAUDCONbits.BRG16 && !TXSTAbits.BRGH)
@@ -577,6 +577,7 @@ inline void serialBegin(long baudRate, byte receiveInterruptPriority) {
         baudRateGenerator /= 16;
     else
         baudRateGenerator /= 4;
+        baudRateGenerator-=1;
 
     // Baud rate = 1200 (Look up table)
     SPBRGH = (byte)(baudRateGenerator >> 8);

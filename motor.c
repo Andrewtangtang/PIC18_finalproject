@@ -166,12 +166,10 @@ void main(void) {
     serialOnReadLine = onReadLine;
     serialOnReadChar = onReadChar;
 
-
     // fan
     pinMode(PIN_RD5,PIN_OUTPUT);
     digitalWrite(PIN_RD5,1);
 
-    //
     // digitalWrite(PIN_RA1, 0);
     // digitalWrite(PIN_RA2, 0);
     // digitalWrite(PIN_RA3, 0);
