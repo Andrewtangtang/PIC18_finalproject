@@ -13,7 +13,7 @@
 #pragma config PBADEN = OFF   // Watchdog Timer Enable bit
 #pragma config LVP = OFF      // Low Voltage (single-supply) In-Circute Serial Pragramming Enable bit
 #pragma config CPD = OFF      // Data EEPROM Memory Code Protection bit (Data EEPROM code protection off)
-
+bool power=false;
 int flash_state = 0;
 
 void motor_stop() {
@@ -38,7 +38,6 @@ void move_back() {
     return;
 }
 void move_forward() {
-    
     digitalWrite(PIN_RD0, 1);
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 1);
@@ -104,11 +103,23 @@ void onReadChar(char c) {
 
 void __interrupt(high_priority) H_ISR() {
     
+    if (interruptByRB0External())
+    {   
+        digitalWrite(PIN_RD6,1);
+        if (power)
+        {
+            power=false;
+        }
+        else{
+            power=true;
+        }
+        clearInterrupt_RB0External();
+    }
     if (interruptByRB1External()) {
         clearInterrupt_RB1External();
         if (INTCON2bits.INTEDG1 == 1) {
             enableTimer1(TIMER1_PRESCALE_8);
-            TMR1 = 0;  
+            TMR1 = 0;
             INTCON2bits.INTEDG1 = 0;
         } else {
             disableTimer1();
@@ -143,23 +154,27 @@ void __interrupt(low_priority) Lo_ISR(void) {
 }
 
 void main(void) {
+
     setIntrnalClock();
-    setPortBPullup(PORTB_PULLUP_ENABLE);
+    setPortBPullup(PORTB_PULLUP_DISABLE);
 
     enableInterruptPriorityMode(1);  // enable the priority interrupt
     enableGlobalInterrupt(1);        // enable the global interrupt
     enablePeripheralInterrupt(1);    // enable peripheral interrupt
-
-    // sonic
-    // pinMode(PIN_RB1, PIN_INPUT);
-    // pinMode(PIN_RD4, PIN_OUTPUT);
-
-    // INTCON2bits.INTEDG1 = 1;
-    // enableInterrupt_RB1External(1);
-
     // Button
     pinMode(PIN_RB0, PIN_INPUT);
+    INTCON2bits.INTEDG0 = 1;
     enableInterrupt_RB0External();  // enable RB0 interrupt
+
+    pinMode(PIN_RD6,PIN_OUTPUT);
+    digitalWrite(PIN_RD6,0);
+    while (!power);
+    
+    //sonic
+    pinMode(PIN_RB1, PIN_INPUT);
+    pinMode(PIN_RD4, PIN_OUTPUT);
+    INTCON2bits.INTEDG1 = 1;
+    enableInterrupt_RB1External(1);
 
     // UART
     serialBegin(9600, 0b0);
@@ -188,7 +203,7 @@ void main(void) {
     pinMode(PIN_RC2, PIN_OUTPUT);
     digitalWrite(PIN_RC2, 0);
     pinMode(PIN_RC1, PIN_OUTPUT);
-
+    digitalWrite(PIN_RC1, 0);
     enableTimer2(TIMER2_PRESCALE_16, 0b0000);
     setTimer2InterruptPeriod(4100, 16, 1);
     setCCP1Mode(ECCP_MODE_PWM_HH);
