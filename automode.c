@@ -5,8 +5,9 @@
 
 #define _XTAL_FREQ 4000000  // Internal Clock speed
 #define LOW_SPEED 800
+#define MID_SPEED 1000
 #define HIGH_SPEED 1700
-#define MOTOR_SPEED_OFFSET 300
+#define MOTOR_SPEED_OFFSET 350
 #include "lib.h"
 
 #pragma config OSC = INTIO67  // Oscillator Selection bits
@@ -20,14 +21,14 @@ int mode = 0;
 bool turrning = false;
 int flash_state = 0;
 
-unsigned int seed = 12345;  
+unsigned int seed = 12345;
 
 unsigned int generateRandom() {
-    seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;  
+    seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
     return seed;
 }
 bool randomBinaryChoice() {
-    return generateRandom() % 2;  
+    return generateRandom() % 2;
 }
 
 void motor_stop() {
@@ -44,10 +45,10 @@ void move_forward() {
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    setCCP1PwmDutyCycle(HIGH_SPEED, 16);
+    setCCP1PwmDutyCycle(HIGH_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(HIGH_SPEED, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(LOW_SPEED+MOTOR_SPEED_OFFSET, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
@@ -56,10 +57,10 @@ void move_back() {
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    setCCP1PwmDutyCycle(HIGH_SPEED, 16);
+    setCCP1PwmDutyCycle(HIGH_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(HIGH_SPEED, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(LOW_SPEED+MOTOR_SPEED_OFFSET, 16);
+    setCCP1PwmDutyCycle(LOW_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(LOW_SPEED, 16);
     return;
 }
@@ -68,11 +69,11 @@ void motor_turn_left() {
     digitalWrite(PIN_RD1, 0);
     digitalWrite(PIN_RD2, 0);
     digitalWrite(PIN_RD3, 1);
-    setCCP1PwmDutyCycle(HIGH_SPEED, 16);
+    setCCP1PwmDutyCycle(HIGH_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(HIGH_SPEED, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(LOW_SPEED+MOTOR_SPEED_OFFSET, 16);
-    setCCP2PwmDutyCycle(LOW_SPEED, 16);
+    setCCP1PwmDutyCycle(MID_SPEED + MOTOR_SPEED_OFFSET, 16);
+    setCCP2PwmDutyCycle(MID_SPEED, 16);
     return;
 }
 void motor_turn_right() {
@@ -80,11 +81,11 @@ void motor_turn_right() {
     digitalWrite(PIN_RD1, 1);
     digitalWrite(PIN_RD2, 1);
     digitalWrite(PIN_RD3, 0);
-    setCCP1PwmDutyCycle(HIGH_SPEED, 16);
+    setCCP1PwmDutyCycle(HIGH_SPEED + MOTOR_SPEED_OFFSET, 16);
     setCCP2PwmDutyCycle(HIGH_SPEED, 16);
     __delay_ms(100);
-    setCCP1PwmDutyCycle(LOW_SPEED+MOTOR_SPEED_OFFSET, 16);
-    setCCP2PwmDutyCycle(LOW_SPEED, 16);
+    setCCP1PwmDutyCycle(MID_SPEED + MOTOR_SPEED_OFFSET, 16);
+    setCCP2PwmDutyCycle(MID_SPEED, 16);
     return;
 }
 
@@ -92,13 +93,35 @@ void fan_toggle() {
     digitalWrite(PIN_RD5, !pinState(PIN_RD5));
     return;
 }
-
+void stop_all() {
+    motor_stop();
+    digitalWrite(PIN_RD5, 1);
+    digitalWrite(PIN_RD6, 0);
+    mode = 0;
+}
+void switch_state() {
+    if (mode == 2) {
+        stop_all();
+    } else if (mode == 0) {
+        mode = 1;
+        digitalWrite(PIN_RD6, 1);
+    } else if (mode == 1) {
+        mode = 2;
+        digitalWrite(PIN_RD6, 1);
+        digitalWrite(PIN_RD5, 0);
+    }
+}
 void onReadLine(char *line, byte len) {
     motor_stop();
     return;
 }
 
 void onReadChar(char c) {
+    if (c == 'C')
+        switch_state();
+
+    if (mode == 0)
+        return;
     if (c == 'R')
         motor_turn_right();
     else if (c == 'L')
@@ -109,29 +132,15 @@ void onReadChar(char c) {
         move_back();
     else if (c == 'S')
         fan_toggle();
-    else
-        motor_stop();
+    else if (c == 'X')
+        stop_all();
     return;
 }
 
 void __interrupt(high_priority) H_ISR() {
     if (interruptByRB0External()) {
-        digitalWrite(PIN_RD6, 1);
-        if (mode == 2) {
-            digitalWrite(PIN_RD6, 0);
-            mode = 0;
-            motor_stop();
-            digitalWrite(PIN_RD5, 1);
-        } else if (mode == 0) {
-            mode = 1;
-            digitalWrite(PIN_RD6, 1);
-        }
-        else if (mode == 1) {
-            mode = 2;
-            digitalWrite(PIN_RD6, 1);
-            digitalWrite(PIN_RD5, 0);
-        }
         clearInterrupt_RB0External();
+        switch_state();
     }
     if (mode == 0)
         return;
@@ -146,7 +155,7 @@ void __interrupt(high_priority) H_ISR() {
             float duration = getTimer1us(8);
             float distance = duration / 29.0 / 2.0 / 100;
             // serialPrintf("Distance: %.4f m\n", distance);
-            
+
             if (distance < 0.3 && !turrning) {
                 if (randomBinaryChoice()) {
                     motor_turn_left();
@@ -154,9 +163,8 @@ void __interrupt(high_priority) H_ISR() {
                     motor_turn_right();
                 }
                 turrning = true;
-            }
-            else if (turrning && distance > 0.3) {
-                __delay_ms(1000);
+            } else if (turrning && distance > 0.3) {
+                __delay_ms(600);
                 motor_stop();
                 turrning = false;
             }
@@ -178,8 +186,6 @@ void __interrupt(high_priority) H_ISR() {
 }
 
 void __interrupt(low_priority) Lo_ISR(void) {
-    if (mode == 0)
-        return;
     if (processSerialReceive())
         return;
 }
@@ -245,16 +251,14 @@ void main(void) {
     while (1) {
         if (mode == 0) {
             continue;
-        }
-        else if (mode == 1) {
+        } else if (mode == 1) {
             TMR1 = 0;
             digitalWrite(PIN_RD4, 1);
             __delay_us(10);
             digitalWrite(PIN_RD4, 0);
             enableTimer1(TIMER1_PRESCALE_8);
             __delay_ms(50);
-        }
-        else if (mode == 2) {
+        } else if (mode == 2) {
             if (!turrning) {
                 move_forward();
             }
